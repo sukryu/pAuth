@@ -3,7 +3,7 @@ package controllers
 import (
 	"context"
 
-	"github.com/sukryu/auth-service/pkg/apis/auth/v1alpha1"
+	"github.com/sukryu/pAuth/pkg/apis/auth/v1alpha1"
 )
 
 type Store interface {
