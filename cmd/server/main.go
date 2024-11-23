@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/sukryu/pAuth/internal/config"
 	"github.com/sukryu/pAuth/internal/store/memory"
 	"github.com/sukryu/pAuth/pkg/apis/handlers"
+	"github.com/sukryu/pAuth/pkg/apis/router"
 	"github.com/sukryu/pAuth/pkg/controllers"
+	"github.com/sukryu/pAuth/pkg/utils/jwt"
 )
 
 func main() {
@@ -23,19 +25,24 @@ func main() {
 
 	// 컨트롤러 초기화
 	authController := controllers.NewAuthController(store)
+	rbacController := controllers.NewRBACController(store)
+
+	// JWT 매니저 초기화
+	jwtManager := jwt.NewJWTManager(
+		cfg.Auth.JWTSecret,
+		time.Duration(cfg.Auth.TokenExpiration)*time.Hour,
+	)
 
 	// 핸들러 초기화
-	authHandler := handlers.NewAuthHandler(authController)
+	authHandler := handlers.NewAuthHandler(authController, jwtManager, rbacController)
 
-	// Gin 라우터 설정
-	router := gin.Default()
-
-	// 핸들러 등록
-	authHandler.Register(router)
+	// 라우터 초기화
+	r := router.NewRouter(authHandler, jwtManager, rbacController)
+	engine := r.Setup()
 
 	// 서버 시작
 	log.Printf("Server starting on %s:%d", cfg.Server.Host, cfg.Server.Port)
-	if err := router.Run(fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)); err != nil {
+	if err := engine.Run(fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }

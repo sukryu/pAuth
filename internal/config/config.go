@@ -26,10 +26,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("server.host", "0.0.0.0")
 	viper.SetDefault("database.driver", "sqlite")
 
-	viper.AutomaticEnv()
-	viper.SetConfigFile("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
+	viper.SetConfigFile("./config.yaml")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {

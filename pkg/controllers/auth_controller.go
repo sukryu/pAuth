@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/sukryu/pAuth/pkg/apis/auth/v1alpha1"
+	"github.com/sukryu/pAuth/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,17 +35,17 @@ func NewAuthController(store Store) AuthController {
 
 func (c *authController) CreateUser(ctx context.Context, user *v1alpha1.User) (*v1alpha1.User, error) {
 	if user.ObjectMeta.Name == "" {
-		return nil, fmt.Errorf("user name cannot be empty")
+		return nil, errors.ErrInvalidInput.WithReason("user name cannot be empty")
 	}
 
 	if user.Spec.PasswordHash == "" {
-		return nil, fmt.Errorf("password cannot be empty")
+		return nil, errors.ErrInvalidInput.WithReason("password cannot be empty")
 	}
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Spec.PasswordHash), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %v", err)
+		return nil, errors.ErrInternal.WithReason("failed to hash password")
 	}
 	user.Spec.PasswordHash = string(hashedPassword)
 
@@ -63,10 +64,9 @@ func (c *authController) CreateUser(ctx context.Context, user *v1alpha1.User) (*
 	now := metav1.Now()
 	user.ObjectMeta.CreationTimestamp = now
 
-	// Store the user
-	err = c.store.Create(ctx, user)
+	err = c.store.CreateUser(ctx, user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %v", err)
+		return nil, err // Store already returns appropriate error
 	}
 
 	return user, nil
@@ -77,7 +77,7 @@ func (c *authController) GetUser(ctx context.Context, name string) (*v1alpha1.Us
 		return nil, fmt.Errorf("user name cannot be empty")
 	}
 
-	user, err := c.store.Get(ctx, name)
+	user, err := c.store.GetUser(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %v", err)
 	}
@@ -90,7 +90,7 @@ func (c *authController) UpdateUser(ctx context.Context, user *v1alpha1.User) (*
 		return nil, fmt.Errorf("user name cannot be empty")
 	}
 
-	existing, err := c.store.Get(ctx, user.Name)
+	existing, err := c.store.GetUser(ctx, user.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get existing user: %v", err)
 	}
@@ -99,7 +99,7 @@ func (c *authController) UpdateUser(ctx context.Context, user *v1alpha1.User) (*
 	user.Spec.PasswordHash = existing.Spec.PasswordHash
 	user.ObjectMeta.CreationTimestamp = existing.ObjectMeta.CreationTimestamp
 
-	err = c.store.Update(ctx, user)
+	err = c.store.UpdateUser(ctx, user)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update user: %v", err)
 	}
@@ -112,7 +112,7 @@ func (c *authController) DeleteUser(ctx context.Context, name string) error {
 		return fmt.Errorf("user name cannot be empty")
 	}
 
-	err := c.store.Delete(ctx, name)
+	err := c.store.DeleteUser(ctx, name)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %v", err)
 	}
@@ -121,7 +121,7 @@ func (c *authController) DeleteUser(ctx context.Context, name string) error {
 }
 
 func (c *authController) ListUsers(ctx context.Context) (*v1alpha1.UserList, error) {
-	users, err := c.store.List(ctx)
+	users, err := c.store.ListUsers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %v", err)
 	}
@@ -130,70 +130,70 @@ func (c *authController) ListUsers(ctx context.Context) (*v1alpha1.UserList, err
 }
 
 func (c *authController) Login(ctx context.Context, username, password string) (*v1alpha1.User, error) {
-	user, err := c.store.Get(ctx, username)
+	if username == "" || password == "" {
+		return nil, errors.ErrInvalidInput.WithReason("username and password are required")
+	}
+
+	user, err := c.store.GetUser(ctx, username)
 	if err != nil {
-		return nil, fmt.Errorf("invalid credentials")
+		return nil, errors.ErrInvalidCredentials.WithReason("invalid username or password")
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Spec.PasswordHash), []byte(password))
 	if err != nil {
-		return nil, fmt.Errorf("invalid credentials")
+		return nil, errors.ErrInvalidCredentials.WithReason("invalid username or password")
 	}
 
 	// Update last login time
 	now := metav1.Now()
 	user.Status.LastLogin = &now
 
-	err = c.store.Update(ctx, user)
+	err = c.store.UpdateUser(ctx, user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update last login time: %v", err)
+		return nil, errors.ErrInternal.WithReason("failed to update last login time")
 	}
 
 	return user, nil
 }
 
 func (c *authController) ChangePassword(ctx context.Context, name, oldPassword, newPassword string) error {
-	user, err := c.store.Get(ctx, name)
+	if name == "" || oldPassword == "" || newPassword == "" {
+		return errors.ErrInvalidInput.WithReason("all fields are required")
+	}
+
+	user, err := c.store.GetUser(ctx, name)
 	if err != nil {
-		return fmt.Errorf("user not found")
+		return err
 	}
 
 	// Verify old password
 	err = bcrypt.CompareHashAndPassword([]byte(user.Spec.PasswordHash), []byte(oldPassword))
 	if err != nil {
-		return fmt.Errorf("invalid old password")
+		return errors.ErrInvalidCredentials.WithReason("invalid old password")
 	}
 
 	// Hash new password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return fmt.Errorf("failed to hash new password: %v", err)
+		return errors.ErrInternal.WithReason("failed to hash new password")
 	}
 
 	user.Spec.PasswordHash = string(hashedPassword)
-
-	err = c.store.Update(ctx, user)
-	if err != nil {
-		return fmt.Errorf("failed to update password: %v", err)
-	}
-
-	return nil
+	return c.store.UpdateUser(ctx, user)
 }
 
 func (c *authController) AssignRoles(ctx context.Context, name string, roles []string) error {
-	user, err := c.store.Get(ctx, name)
+	if name == "" || len(roles) == 0 {
+		return errors.ErrInvalidInput.WithReason("name and roles are required")
+	}
+
+	user, err := c.store.GetUser(ctx, name)
 	if err != nil {
-		return fmt.Errorf("user not found")
+		return err
 	}
 
 	user.Spec.Roles = roles
-
-	err = c.store.Update(ctx, user)
-	if err != nil {
-		return fmt.Errorf("failed to assign roles: %v", err)
-	}
-
-	return nil
+	return c.store.UpdateUser(ctx, user)
 }
 
 func (c *authController) ValidateToken(ctx context.Context, token string) (*v1alpha1.User, error) {
