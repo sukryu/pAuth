@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/sukryu/pAuth/internal/config"
-	"github.com/sukryu/pAuth/internal/store/memory"
 	"github.com/sukryu/pAuth/pkg/apis/handlers"
 	"github.com/sukryu/pAuth/pkg/apis/router"
 	"github.com/sukryu/pAuth/pkg/controllers"

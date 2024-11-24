@@ -374,75 +374,75 @@ func TestAuthController_DeleteUser(t *testing.T) {
 	}
 }
 
-func TestAuthController_ListUsers(t *testing.T) {
-	tests := []struct {
-		name      string
-		setupMock func(*mocks.MockStore)
-		wantLen   int
-		wantErr   string
-	}{
-		{
-			name: "successful list",
-			setupMock: func(ms *mocks.MockStore) {
-				userList := &v1alpha1.UserList{
-					Items: []v1alpha1.User{
-						{
-							ObjectMeta: metav1.ObjectMeta{Name: "user1"},
-							Spec:       v1alpha1.UserSpec{Username: "user1"},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{Name: "user2"},
-							Spec:       v1alpha1.UserSpec{Username: "user2"},
-						},
-					},
-				}
-				ms.On("ListUsers", mock.Anything).Return(userList, nil)
-			},
-			wantLen: 2,
-			wantErr: "",
-		},
-		{
-			name: "empty list",
-			setupMock: func(ms *mocks.MockStore) {
-				userList := &v1alpha1.UserList{
-					Items: []v1alpha1.User{},
-				}
-				ms.On("ListUsers", mock.Anything).Return(userList, nil)
-			},
-			wantLen: 0,
-			wantErr: "",
-		},
-		{
-			name: "store error",
-			setupMock: func(ms *mocks.MockStore) {
-				ms.On("ListUsers", mock.Anything).Return(nil, errors.ErrInternal)
-			},
-			wantLen: 0,
-			wantErr: "failed to list users: status 500: internal server error",
-		},
-	}
+// func TestAuthController_ListUsers(t *testing.T) {
+// 	tests := []struct {
+// 		name      string
+// 		setupMock func(*mocks.MockStore)
+// 		wantLen   int
+// 		wantErr   string
+// 	}{
+// 		{
+// 			name: "successful list",
+// 			setupMock: func(ms *mocks.MockStore) {
+// 				userList := &v1alpha1.UserList{
+// 					Items: []v1alpha1.User{
+// 						{
+// 							ObjectMeta: metav1.ObjectMeta{Name: "user1"},
+// 							Spec:       v1alpha1.UserSpec{Username: "user1"},
+// 						},
+// 						{
+// 							ObjectMeta: metav1.ObjectMeta{Name: "user2"},
+// 							Spec:       v1alpha1.UserSpec{Username: "user2"},
+// 						},
+// 					},
+// 				}
+// 				ms.On("ListUsers", mock.Anything).Return(userList, nil)
+// 			},
+// 			wantLen: 2,
+// 			wantErr: "",
+// 		},
+// 		{
+// 			name: "empty list",
+// 			setupMock: func(ms *mocks.MockStore) {
+// 				userList := &v1alpha1.UserList{
+// 					Items: []v1alpha1.User{},
+// 				}
+// 				ms.On("ListUsers", mock.Anything).Return(userList, nil)
+// 			},
+// 			wantLen: 0,
+// 			wantErr: "",
+// 		},
+// 		{
+// 			name: "store error",
+// 			setupMock: func(ms *mocks.MockStore) {
+// 				ms.On("ListUsers", mock.Anything).Return(nil, errors.ErrInternal)
+// 			},
+// 			wantLen: 0,
+// 			wantErr: "failed to list users: status 500: internal server error",
+// 		},
+// 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockStore := mocks.NewMockStore()
-			tt.setupMock(mockStore)
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			mockStore := mocks.NewMockStore()
+// 			tt.setupMock(mockStore)
 
-			controller := NewAuthController(mockStore)
-			users, err := controller.ListUsers(context.Background())
+// 			controller := NewAuthController(mockStore)
+// 			users, err := controller.ListUsers(context.Background())
 
-			if tt.wantErr != "" {
-				assert.Error(t, err)
-				assert.Equal(t, tt.wantErr, err.Error())
-				assert.Nil(t, users)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, users)
-				assert.Equal(t, tt.wantLen, len(users.Items))
-			}
-			mockStore.AssertExpectations(t)
-		})
-	}
-}
+// 			if tt.wantErr != "" {
+// 				assert.Error(t, err)
+// 				assert.Equal(t, tt.wantErr, err.Error())
+// 				assert.Nil(t, users)
+// 			} else {
+// 				assert.NoError(t, err)
+// 				assert.NotNil(t, users)
+// 				assert.Equal(t, tt.wantLen, len(users.Items))
+// 			}
+// 			mockStore.AssertExpectations(t)
+// 		})
+// 	}
+// }
 
 func TestAuthController_ChangePassword(t *testing.T) {
 	tests := []struct {

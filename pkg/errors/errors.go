@@ -58,4 +58,16 @@ var (
 	// Binding errors
 	ErrRoleBindingExists   = NewStatusError(http.StatusConflict, "role binding already exists")
 	ErrRoleBindingNotFound = NewStatusError(http.StatusNotFound, "role binding not found")
+
+	// Generic Store errors
+	ErrNotFound      = NewStatusError(http.StatusNotFound, "resource not found")
+	ErrAlreadyExists = NewStatusError(http.StatusConflict, "resource already exists")
+
+	// Store Operation errors
+	ErrStorageOperation  = NewStatusError(http.StatusInternalServerError, "storage operation failed")
+	ErrTransactionFailed = NewStatusError(http.StatusInternalServerError, "transaction failed")
+
+	// Database specific errors
+	ErrUniqueViolation    = NewStatusError(http.StatusConflict, "unique constraint violation")
+	ErrDatabaseConnection = NewStatusError(http.StatusInternalServerError, "database connection failed")
 )
