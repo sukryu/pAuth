@@ -443,3 +443,180 @@ func TestAuthController_ListUsers(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthController_ChangePassword(t *testing.T) {
+	tests := []struct {
+		name        string
+		username    string
+		oldPassword string
+		newPassword string
+		setupMock   func(*mocks.MockStore)
+		wantErr     string
+	}{
+		{
+			name:        "successful password change",
+			username:    "testuser",
+			oldPassword: "oldpass123",
+			newPassword: "newpass123",
+			setupMock: func(ms *mocks.MockStore) {
+				hashedOldPass, _ := bcrypt.GenerateFromPassword([]byte("oldpass123"), bcrypt.DefaultCost)
+				existingUser := &v1alpha1.User{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testuser",
+					},
+					Spec: v1alpha1.UserSpec{
+						Username:     "testuser",
+						PasswordHash: string(hashedOldPass),
+					},
+				}
+				ms.On("GetUser", mock.Anything, "testuser").Return(existingUser, nil)
+				ms.On("UpdateUser", mock.Anything, mock.MatchedBy(func(u *v1alpha1.User) bool {
+					return u.Name == "testuser" && u.Spec.PasswordHash != string(hashedOldPass)
+				})).Return(nil)
+			},
+			wantErr: "",
+		},
+		{
+			name:        "user not found",
+			username:    "nonexistent",
+			oldPassword: "oldpass",
+			newPassword: "newpass",
+			setupMock: func(ms *mocks.MockStore) {
+				ms.On("GetUser", mock.Anything, "nonexistent").Return(nil, errors.ErrUserNotFound)
+			},
+			wantErr: "status 404: user not found",
+		},
+		{
+			name:        "incorrect old password",
+			username:    "testuser",
+			oldPassword: "wrongpass",
+			newPassword: "newpass123",
+			setupMock: func(ms *mocks.MockStore) {
+				hashedOldPass, _ := bcrypt.GenerateFromPassword([]byte("correctpass"), bcrypt.DefaultCost)
+				existingUser := &v1alpha1.User{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testuser",
+					},
+					Spec: v1alpha1.UserSpec{
+						Username:     "testuser",
+						PasswordHash: string(hashedOldPass),
+					},
+				}
+				ms.On("GetUser", mock.Anything, "testuser").Return(existingUser, nil)
+			},
+			wantErr: "status 401: invalid credentials: invalid old password",
+		},
+		{
+			name:        "empty username",
+			username:    "",
+			oldPassword: "oldpass",
+			newPassword: "newpass",
+			setupMock:   func(ms *mocks.MockStore) {},
+			wantErr:     "status 400: invalid input: all fields are required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStore := mocks.NewMockStore()
+			tt.setupMock(mockStore)
+
+			controller := NewAuthController(mockStore)
+			err := controller.ChangePassword(context.Background(), tt.username, tt.oldPassword, tt.newPassword)
+
+			if tt.wantErr != "" {
+				assert.Error(t, err)
+				assert.Equal(t, tt.wantErr, err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+			mockStore.AssertExpectations(t)
+		})
+	}
+}
+
+func TestAuthController_AssignRoles(t *testing.T) {
+	tests := []struct {
+		name      string
+		username  string
+		roles     []string
+		setupMock func(*mocks.MockStore)
+		wantErr   string
+	}{
+		{
+			name:     "successful role assignment",
+			username: "testuser",
+			roles:    []string{"admin", "user"},
+			setupMock: func(ms *mocks.MockStore) {
+				existingUser := &v1alpha1.User{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testuser",
+					},
+					Spec: v1alpha1.UserSpec{
+						Username: "testuser",
+						Roles:    []string{"user"},
+					},
+				}
+				ms.On("GetUser", mock.Anything, "testuser").Return(existingUser, nil)
+				ms.On("UpdateUser", mock.Anything, mock.MatchedBy(func(u *v1alpha1.User) bool {
+					return u.Name == "testuser" &&
+						len(u.Spec.Roles) == 2 &&
+						containsString(u.Spec.Roles, "admin") &&
+						containsString(u.Spec.Roles, "user")
+				})).Return(nil)
+			},
+			wantErr: "",
+		},
+		{
+			name:     "user not found",
+			username: "nonexistent",
+			roles:    []string{"admin"},
+			setupMock: func(ms *mocks.MockStore) {
+				ms.On("GetUser", mock.Anything, "nonexistent").Return(nil, errors.ErrUserNotFound)
+			},
+			wantErr: "status 404: user not found",
+		},
+		{
+			name:      "empty username",
+			username:  "",
+			roles:     []string{"admin"},
+			setupMock: func(ms *mocks.MockStore) {},
+			wantErr:   "status 400: invalid input: name and roles are required",
+		},
+		{
+			name:      "empty roles",
+			username:  "testuser",
+			roles:     []string{},
+			setupMock: func(ms *mocks.MockStore) {},
+			wantErr:   "status 400: invalid input: name and roles are required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStore := mocks.NewMockStore()
+			tt.setupMock(mockStore)
+
+			controller := NewAuthController(mockStore)
+			err := controller.AssignRoles(context.Background(), tt.username, tt.roles)
+
+			if tt.wantErr != "" {
+				assert.Error(t, err)
+				assert.Equal(t, tt.wantErr, err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+			mockStore.AssertExpectations(t)
+		})
+	}
+}
+
+// 헬퍼 함수
+func containsString(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
+}

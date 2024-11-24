@@ -54,4 +54,8 @@ var (
 	// Server errors
 	ErrInternal       = NewStatusError(http.StatusInternalServerError, "internal server error")
 	ErrNotImplemented = NewStatusError(http.StatusNotImplemented, "not implemented")
+
+	// Binding errors
+	ErrRoleBindingExists   = NewStatusError(http.StatusConflict, "role binding already exists")
+	ErrRoleBindingNotFound = NewStatusError(http.StatusNotFound, "role binding not found")
 )

@@ -20,7 +20,6 @@ type AuthController interface {
 	Login(ctx context.Context, username, password string) (*v1alpha1.User, error)
 	ChangePassword(ctx context.Context, name, oldPassword, newPassword string) error
 	AssignRoles(ctx context.Context, name string, roles []string) error
-	ValidateToken(ctx context.Context, token string) (*v1alpha1.User, error)
 }
 
 type authController struct {
@@ -194,9 +193,4 @@ func (c *authController) AssignRoles(ctx context.Context, name string, roles []s
 
 	user.Spec.Roles = roles
 	return c.store.UpdateUser(ctx, user)
-}
-
-func (c *authController) ValidateToken(ctx context.Context, token string) (*v1alpha1.User, error) {
-	// TODO: Implement JWT token validation
-	return nil, fmt.Errorf("not implemented")
 }

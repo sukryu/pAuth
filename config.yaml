@@ -1,11 +1,17 @@
-server:
-  port: 8080
-  host: "0.0.0.0"
-
 database:
-  driver: "sqlite"
-  dsn: "auth.db"
+  type: "sqlite"  # sqlite, postgresql, mysql
+  database: "auth.db"
+  # PostgreSQL/MySQL 설정 예시
+  # host: "localhost"
+  # port: 5432
+  # username: "authuser"
+  # password: "authpass"
+  # sslmode: "disable"
+
+server:
+  host: "0.0.0.0"
+  port: 8080
 
 auth:
-  jwtSecret: "your-secret-key-here"
+  jwtSecret: "your-super-secret-key-here"
   tokenExpiration: 24  # hours
