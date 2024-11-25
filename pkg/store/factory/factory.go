@@ -6,6 +6,8 @@ import (
 
 	"github.com/sukryu/pAuth/internal/config"
 	"github.com/sukryu/pAuth/pkg/store/database"
+	"github.com/sukryu/pAuth/pkg/store/dynamic"
+	"github.com/sukryu/pAuth/pkg/store/dynamic/sqlite"
 	"github.com/sukryu/pAuth/pkg/store/interfaces"
 	"github.com/sukryu/pAuth/pkg/store/role"
 	rolebinding "github.com/sukryu/pAuth/pkg/store/role_binding"
@@ -16,6 +18,7 @@ type StoreFactory interface {
 	NewUserStore(cfg *config.DatabaseConfig) (interfaces.UserStore, error)
 	NewRoleStore(cfg *config.DatabaseConfig) (interfaces.RoleStore, error)
 	NewRoleBindingStore(cfg *config.DatabaseConfig) (interfaces.RoleBindingStore, error)
+	NewDynamicStore(cfg *config.DatabaseConfig) (dynamic.DynamicStore, error)
 	Close() error
 	GetStats() map[string]interface{}
 }
@@ -96,6 +99,22 @@ func (f *storeFactory) NewRoleBindingStore(cfg *config.DatabaseConfig) (interfac
 	}
 
 	return rolebinding.NewStore(manager.GetDB(), cfg.Type)
+}
+
+func (f *storeFactory) NewDynamicStore(cfg *config.DatabaseConfig) (dynamic.DynamicStore, error) {
+	manager, err := f.getManager(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	switch cfg.Type {
+	case "sqlite":
+		return sqlite.NewSQLiteDynamicStore(manager.GetDB())
+	// case "postgres":
+	// 	return postgres.NewPostgresDynamicStore(manager.GetDB())
+	default:
+		return nil, fmt.Errorf("unsupported database type: %s", cfg.Type)
+	}
 }
 
 func (f *storeFactory) Close() error {

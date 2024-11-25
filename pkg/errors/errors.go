@@ -70,4 +70,9 @@ var (
 	// Database specific errors
 	ErrUniqueViolation    = NewStatusError(http.StatusConflict, "unique constraint violation")
 	ErrDatabaseConnection = NewStatusError(http.StatusInternalServerError, "database connection failed")
+
+	// Dynamic errors
+	ErrInvalidFieldType = NewStatusError(http.StatusBadRequest, "invalid field type")
+	ErrInvalidJSON      = NewStatusError(http.StatusBadRequest, "invalid JSON format")
+	ErrInvalidTimestamp = NewStatusError(http.StatusBadRequest, "invalid timestamp format")
 )

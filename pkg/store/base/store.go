@@ -21,7 +21,7 @@ type Store[T Object] interface {
 	Get(ctx context.Context, name string) (T, error)
 	Update(ctx context.Context, obj T) error
 	Delete(ctx context.Context, name string) error
-	List(ctx context.Context) ([]T, error) // 포인터 슬라이스로 변경
+	List(ctx context.Context) ([]T, error)
 
 	// Transaction support
 	Transaction(ctx context.Context, fn func(tx *gorm.DB) error) error
