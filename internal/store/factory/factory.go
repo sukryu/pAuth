@@ -8,13 +8,16 @@ import (
 	"github.com/sukryu/pAuth/internal/store/dynamic"
 	"github.com/sukryu/pAuth/internal/store/interfaces"
 	"github.com/sukryu/pAuth/internal/store/manager"
+	"github.com/sukryu/pAuth/internal/store/role"
+	rolebinding "github.com/sukryu/pAuth/internal/store/role_binding"
+	"github.com/sukryu/pAuth/internal/store/user"
 )
 
 type StoreFactory interface {
-	//NewUserStore(cfg *config.DatabaseConfig) (interfaces.UserStore, error)
-	//NewRoleStore(cfg *config.DatabaseConfig) (interfaces.RoleStore, error)
-	//NewRoleBindingStore(cfg *config.DatabaseConfig) (interfaces.RoleBindingStore, error)
-	//NewDynamicStore(cfg *config.DatabaseConfig) (dynamic.DynamicStore, error)
+	NewUserStore(cfg *config.DatabaseConfig) (interfaces.UserStore, error)
+	NewRoleStore(cfg *config.DatabaseConfig) (interfaces.RoleStore, error)
+	NewRoleBindingStore(cfg *config.DatabaseConfig) (interfaces.RoleBindingStore, error)
+	NewDynamicStore(cfg *config.DatabaseConfig) (*dynamic.DynamicStore, error)
 	Close() error
 	GetStats() map[string]interface{}
 }
@@ -34,23 +37,23 @@ func NewStoreFactory(managerFactory manager.ManagerFactory) StoreFactory {
 
 func (f *storeFactory) getManager(cfg *config.DatabaseConfig) (manager.Manager, error) {
 	f.mu.RLock()
-	manager, exists := f.managers[cfg.GetDSN()]
+	mgr, exists := f.managers[cfg.GetDSN()]
 	f.mu.RUnlock()
 
 	if exists {
-		return manager, nil
+		return mgr, nil
 	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if manager, exists = f.managers[cfg.GetDSN()]; exists {
-		return manager, nil
+	if mgr, exists = f.managers[cfg.GetDSN()]; exists {
+		return mgr, nil
 	}
 
 	// Create new manager
-	manager, err := f.managerFactory.NewManager(manager.Config{
+	mgr, err := f.managerFactory.NewManager(manager.Config{
 		Type: cfg.Type,
 		DSN:  cfg.GetDSN(),
 	})
@@ -59,21 +62,21 @@ func (f *storeFactory) getManager(cfg *config.DatabaseConfig) (manager.Manager, 
 	}
 
 	// Initialize the manager
-	if err := manager.Initialize(nil); err != nil {
+	if err := mgr.Initialize(nil); err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %v", err)
 	}
 
-	f.managers[cfg.GetDSN()] = manager
-	return manager, nil
+	f.managers[cfg.GetDSN()] = mgr
+	return mgr, nil
 }
 
-func (f *storeFactory) NewDynamicStore(cfg *config.DatabaseConfig) (dynamic.DynamicStore, error) {
+func (f *storeFactory) NewDynamicStore(cfg *config.DatabaseConfig) (*dynamic.DynamicStore, error) {
 	manager, err := f.getManager(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return dynamic.NewDynamicStore(manager.GetDB())
+	return dynamic.NewDynamicStore(manager.GetDB()), nil
 }
 
 func (f *storeFactory) NewUserStore(cfg *config.DatabaseConfig) (interfaces.UserStore, error) {
@@ -93,7 +96,9 @@ func (f *storeFactory) NewRoleStore(cfg *config.DatabaseConfig) (interfaces.Role
 		return nil, err
 	}
 
-	return role.NewStore(dynStore, cfg.Type)
+	return role.NewStore(dynStore, role.Config{
+		DatabaseType: cfg.Type,
+	})
 }
 
 func (f *storeFactory) NewRoleBindingStore(cfg *config.DatabaseConfig) (interfaces.RoleBindingStore, error) {
@@ -102,8 +107,11 @@ func (f *storeFactory) NewRoleBindingStore(cfg *config.DatabaseConfig) (interfac
 		return nil, err
 	}
 
-	return rolebinding.NewStore(dynStore, cfg.Type)
+	return rolebinding.NewStore(dynStore, rolebinding.Config{
+		DatabaseType: cfg.Type,
+	})
 }
+
 func (f *storeFactory) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

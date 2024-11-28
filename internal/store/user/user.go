@@ -1,13 +1,15 @@
-package store
+package user
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sukryu/pAuth/internal/store/dynamic"
 	"github.com/sukryu/pAuth/internal/store/interfaces"
+	"github.com/sukryu/pAuth/internal/store/schema"
 	"github.com/sukryu/pAuth/pkg/apis/auth/v1alpha1"
 	"github.com/sukryu/pAuth/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,11 +20,11 @@ type Config struct {
 }
 
 type Store struct {
-	dynamicStore dynamic.DynamicStore
+	dynamicStore *dynamic.DynamicStore
 	config       Config
 }
 
-func NewStore(dynStore dynamic.DynamicStore, cfg Config) (interfaces.UserStore, error) {
+func NewStore(dynStore *dynamic.DynamicStore, cfg Config) (interfaces.UserStore, error) {
 	return &Store{
 		dynamicStore: dynStore,
 		config:       cfg,
@@ -30,9 +32,8 @@ func NewStore(dynStore dynamic.DynamicStore, cfg Config) (interfaces.UserStore, 
 }
 
 func (s *Store) Create(ctx context.Context, user *v1alpha1.User) error {
-	// 스키마 가져오기
-	schema, err := s.dynamicStore.GetTableSchema(ctx, "users")
-	if err != nil {
+	// 테이블이 존재하는지 확인 (schema 검증용)
+	if _, err := s.dynamicStore.GetTableSchema(ctx, "users"); err != nil {
 		return err
 	}
 
@@ -55,11 +56,11 @@ func (s *Store) Create(ctx context.Context, user *v1alpha1.User) error {
 		"updated_at":    now,
 	}
 
-	// roles와 last_login은 별도 처리 (JSON/NULL 가능)
+	// roles와 last_login 처리
 	if len(user.Spec.Roles) > 0 {
 		rolesJSON, err := json.Marshal(user.Spec.Roles)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to marshal roles: %w", err)
 		}
 		coreFields["roles"] = string(rolesJSON)
 	}
@@ -73,17 +74,16 @@ func (s *Store) Create(ctx context.Context, user *v1alpha1.User) error {
 		data[k] = v
 	}
 
-	// 추가 필드 처리 (annotations에서)
-	for key, value := range user.Annotations {
-		// 해당 필드가 스키마에 존재하는지 확인
-		for _, field := range schema {
-			if key == field {
-				data[key] = value
-				break
-			}
+	// 사용자 정의 필드 (Annotations) 처리
+	if len(user.Annotations) > 0 {
+		annotationsJSON, err := json.Marshal(user.Annotations)
+		if err != nil {
+			return fmt.Errorf("failed to marshal annotations: %w", err)
 		}
+		data["annotations"] = string(annotationsJSON)
 	}
 
+	// 데이터 삽입
 	return s.dynamicStore.DynamicInsert(ctx, "users", data)
 }
 
@@ -103,19 +103,30 @@ func (s *Store) Get(ctx context.Context, name string) (*v1alpha1.User, error) {
 }
 
 func (s *Store) Update(ctx context.Context, user *v1alpha1.User) error {
-	// 스키마 정보 가져오기
-	schema, err := s.dynamicStore.GetTableSchema(ctx, "users")
+	// 데이터 업데이트 전에 기존 레코드 확인
+	existing, err := s.Get(ctx, user.Name)
 	if err != nil {
 		return err
 	}
 
-	data := make(map[string]interface{})
+	// UNIQUE 필드 충돌 방지: username, email 확인
+	if existing.Spec.Username != user.Spec.Username {
+		conflictCheck, err := s.FindByUsername(ctx, user.Spec.Username)
+		if err == nil && conflictCheck.Name != user.Name {
+			return fmt.Errorf("username '%s' already exists", user.Spec.Username)
+		}
+	}
+	if existing.Spec.Email != user.Spec.Email {
+		conflictCheck, err := s.FindByEmail(ctx, user.Spec.Email)
+		if err == nil && conflictCheck.Name != user.Name {
+			return fmt.Errorf("email '%s' already exists", user.Spec.Email)
+		}
+	}
 
-	// 기본 필드 업데이트
-	baseFields := map[string]interface{}{
+	// 업데이트 데이터 생성
+	data := map[string]interface{}{
 		"username":   user.Spec.Username,
 		"email":      user.Spec.Email,
-		"is_active":  user.Status.Active,
 		"updated_at": time.Now(),
 	}
 
@@ -125,27 +136,18 @@ func (s *Store) Update(ctx context.Context, user *v1alpha1.User) error {
 		if err != nil {
 			return err
 		}
-		baseFields["roles"] = string(rolesJSON)
+		data["roles"] = string(rolesJSON)
 	}
-
 	if user.Status.LastLogin != nil {
-		baseFields["last_login"] = user.Status.LastLogin.Time
+		data["last_login"] = user.Status.LastLogin.Time
 	}
 
-	// 기본 필드 복사
-	for k, v := range baseFields {
-		data[k] = v
+	// Annotations 처리
+	annotationsJSON, err := json.Marshal(user.Annotations)
+	if err != nil {
+		return err
 	}
-
-	// 추가 필드 처리
-	for key, value := range user.Annotations {
-		for _, field := range schema {
-			if key == field {
-				data[key] = value
-				break
-			}
-		}
-	}
+	data["annotations"] = string(annotationsJSON)
 
 	return s.dynamicStore.DynamicUpdate(ctx, "users", user.Name, data)
 }
@@ -203,7 +205,7 @@ func mapToUser(data map[string]interface{}) (*v1alpha1.User, error) {
 	if roles, ok := data["roles"]; ok && roles != nil {
 		var rolesList []string
 		if err := json.Unmarshal([]byte(roles.(string)), &rolesList); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal roles: %v", err)
+			return nil, fmt.Errorf("failed to unmarshal roles: %w", err)
 		}
 		user.Spec.Roles = rolesList
 	}
@@ -216,17 +218,13 @@ func mapToUser(data map[string]interface{}) (*v1alpha1.User, error) {
 		}
 	}
 
-	// 추가 필드 처리
-	coreFields := map[string]bool{
-		"id": true, "username": true, "email": true,
-		"password_hash": true, "is_active": true, "roles": true,
-		"last_login": true, "created_at": true, "updated_at": true,
-	}
-
-	for key, value := range data {
-		if !coreFields[key] && value != nil {
-			user.Annotations[key] = fmt.Sprint(value)
+	// 사용자 정의 필드 (Annotations) 처리
+	if annotations, ok := data["annotations"]; ok && annotations != nil {
+		var parsedAnnotations map[string]string
+		if err := json.Unmarshal([]byte(annotations.(string)), &parsedAnnotations); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
 		}
+		user.Annotations = parsedAnnotations
 	}
 
 	return user, nil
@@ -315,4 +313,20 @@ func (s *Store) ListByRole(ctx context.Context, roleName string) (*v1alpha1.User
 	}
 
 	return userList, nil
+}
+
+func parseSchemaFields(schemaFields []string) map[string]schema.FieldType {
+	parsedFields := make(map[string]schema.FieldType)
+
+	for _, field := range schemaFields {
+		parts := strings.SplitN(field, " ", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		fieldName := parts[0]
+		fieldType := schema.FieldType(parts[1])
+		parsedFields[fieldName] = fieldType
+	}
+
+	return parsedFields
 }

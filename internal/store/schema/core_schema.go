@@ -21,6 +21,7 @@ var CoreSchemas = []EntitySchema{
 			{Name: "password_hash", Type: FieldTypeString, Required: true},
 			{Name: "is_active", Type: FieldTypeBoolean, Required: true, DefaultValue: true},
 			{Name: "last_login", Type: FieldTypeTimestamp},
+			{Name: "annotations", Type: FieldTypeJSON}, // JSON으로 처리되는 사용자 정의 필드
 		},
 		Indexes: []IndexDef{
 			{Name: "idx_users_username", Columns: []string{"username"}, Unique: true},

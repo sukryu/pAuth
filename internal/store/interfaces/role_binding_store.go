@@ -17,5 +17,5 @@ type RoleBindingStore interface {
 	FindByRole(ctx context.Context, roleName string) ([]*v1alpha1.RoleBinding, error)
 	AddSubject(ctx context.Context, name string, subject v1alpha1.Subject) error
 	RemoveSubject(ctx context.Context, name string, subject v1alpha1.Subject) error
-	ListByNamespace(ctx context.Context, namespace string) ([]*v1alpha1.RoleBinding, error)
+	//ListByNamespace(ctx context.Context, namespace string) ([]*v1alpha1.RoleBinding, error)
 }

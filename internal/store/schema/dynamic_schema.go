@@ -55,22 +55,22 @@ func (f FieldDef) GenerateColumnDef() string {
 	return columnDef
 }
 
-func validateFieldType(value interface{}, fieldType FieldType) error {
+func ValidateFieldType(value interface{}, fieldType FieldType) error {
 	switch fieldType {
 	case FieldTypeString:
 		if _, ok := value.(string); !ok {
-			return fmt.Errorf("value must be string type")
+			return fmt.Errorf("value must be of type string")
 		}
 	case FieldTypeNumber, FieldTypeInteger:
 		switch value.(type) {
 		case int, int32, int64, float32, float64:
 			return nil
 		default:
-			return fmt.Errorf("value must be numeric type")
+			return fmt.Errorf("value must be of type number or integer")
 		}
 	case FieldTypeBoolean:
 		if _, ok := value.(bool); !ok {
-			return fmt.Errorf("value must be boolean type")
+			return fmt.Errorf("value must be of type boolean")
 		}
 	case FieldTypeTimestamp:
 		switch v := value.(type) {
@@ -81,8 +81,15 @@ func validateFieldType(value interface{}, fieldType FieldType) error {
 		case time.Time:
 			return nil
 		default:
-			return fmt.Errorf("value must be timestamp type")
+			return fmt.Errorf("value must be of type timestamp")
 		}
+	case FieldTypeJSON:
+		// JSON 타입은 직렬화 가능 여부로 검증
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("value must be JSON serializable")
+		}
+	default:
+		return fmt.Errorf("unsupported field type: %s", fieldType)
 	}
 	return nil
 }

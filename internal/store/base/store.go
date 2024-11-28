@@ -2,8 +2,8 @@ package base
 
 import (
 	"context"
+	"database/sql"
 
-	"gorm.io/gorm"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -11,7 +11,7 @@ import (
 type Object interface {
 	GetName() string
 	SetName(string)
-	GetObjectMeta() v1.Object // metav1.ObjectMeta로 변경
+	GetObjectMeta() v1.Object
 }
 
 // Store defines the interface for all database implementations
@@ -24,11 +24,11 @@ type Store[T Object] interface {
 	List(ctx context.Context) ([]T, error)
 
 	// Transaction support
-	Transaction(ctx context.Context, fn func(tx *gorm.DB) error) error
+	Transaction(ctx context.Context, fn func(tx *sql.Tx) error) error
 
 	// Database specific operations
 	IsNotFound(err error) bool
 	IsUniqueViolation(err error) bool
-	GetDB() *gorm.DB
+	GetDB() *sql.DB
 	GetTableName() string
 }
