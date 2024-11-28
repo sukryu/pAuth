@@ -22,6 +22,9 @@ type Manager interface {
 
 	// GetStats returns database statistics
 	GetStats() map[string]interface{}
+
+	// EnsureSchemaExists ensures the existence of a specific schema
+	EnsureSchemaExists(ctx context.Context, schemaName string, schemaSQL string) error
 }
 
 // Config holds database configuration
@@ -61,7 +64,7 @@ func NewSQLManager(cfg Config) (*SQLManager, error) {
 
 // Initialize performs any necessary database setup
 func (m *SQLManager) Initialize(ctx context.Context) error {
-	// Example: Run migration scripts if needed
+	// Example: Run migrations or other setup tasks
 	return nil
 }
 
@@ -78,12 +81,26 @@ func (m *SQLManager) Close() error {
 // GetStats returns database statistics
 func (m *SQLManager) GetStats() map[string]interface{} {
 	stats := m.db.Stats()
+	healthy := true
+	if err := m.db.Ping(); err != nil {
+		healthy = false
+	}
 	return map[string]interface{}{
 		"max_open_conns": stats.MaxOpenConnections,
 		"open_conns":     stats.OpenConnections,
 		"in_use":         stats.InUse,
 		"idle":           stats.Idle,
+		"healthy":        healthy,
 	}
+}
+
+// EnsureSchemaExists ensures the existence of a specific schema in the database
+func (m *SQLManager) EnsureSchemaExists(ctx context.Context, schemaName string, schemaSQL string) error {
+	_, err := m.db.ExecContext(ctx, schemaSQL)
+	if err != nil {
+		return fmt.Errorf("failed to ensure schema exists: %w", err)
+	}
+	return nil
 }
 
 // ManagerFactory creates database managers
@@ -96,5 +113,13 @@ type SQLManagerFactory struct{}
 
 // NewManager creates a new SQLManager
 func (f *SQLManagerFactory) NewManager(cfg Config) (Manager, error) {
-	return NewSQLManager(cfg)
+	switch cfg.Type {
+	case "sqlite":
+		return NewSQLManager(cfg)
+	case "postgresql":
+		// Add logic for PostgreSQL-specific manager initialization if needed
+		return NewSQLManager(cfg)
+	default:
+		return nil, fmt.Errorf("unsupported database type: %s", cfg.Type)
+	}
 }

@@ -15,7 +15,33 @@ type EntitySchema struct {
 	Description sql.NullString
 	Fields      string
 	Indexes     sql.NullString
+	Annotations sql.NullString
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   sql.NullTime
+}
+
+type SchemaDependency struct {
+	ID             int64
+	ParentSchema   string
+	ChildSchema    string
+	DependencyType string
+	CreatedAt      time.Time
+}
+
+type SchemaLog struct {
+	ID         int64
+	SchemaName string
+	Operation  string
+	Operator   sql.NullString
+	Details    sql.NullString
+	Timestamp  time.Time
+}
+
+type SchemaVersion struct {
+	ID         int64
+	SchemaName string
+	Version    int64
+	Changes    string
+	CreatedAt  time.Time
 }

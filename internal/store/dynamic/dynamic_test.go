@@ -9,15 +9,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/sukryu/pAuth/internal/db"
 	"github.com/sukryu/pAuth/internal/store/dynamic/query"
+	"github.com/sukryu/pAuth/internal/store/manager"
 	"github.com/sukryu/pAuth/internal/store/schema"
 )
 
 func setupTestDB(t *testing.T) (*sql.DB, *DynamicStore) {
-	// SQLite in-memory 데이터베이스 생성
-	dbConn, err := sql.Open("sqlite3", ":memory:")
+	// Manager 설정
+	manager, err := manager.NewSQLManager(manager.Config{
+		Type: "sqlite3",
+		DSN:  ":memory:",
+	})
 	if err != nil {
-		t.Fatalf("failed to open test db: %v", err)
+		t.Fatalf("failed to create SQLManager: %v", err)
 	}
+
+	// 데이터베이스 연결 가져오기
+	dbConn := manager.GetDB()
 
 	// 스키마 테이블 생성
 	_, err = dbConn.Exec(`
@@ -27,6 +34,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *DynamicStore) {
            description TEXT,
            fields TEXT NOT NULL,
            indexes TEXT,
+		   annotations TEXT,
            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
            deleted_at TIMESTAMP
@@ -36,7 +44,12 @@ func setupTestDB(t *testing.T) (*sql.DB, *DynamicStore) {
 		t.Fatalf("failed to create schema table: %v", err)
 	}
 
-	store := NewDynamicStore(dbConn)
+	// DynamicStore 생성
+	store, err := NewDynamicStore(manager)
+	if err != nil {
+		t.Fatalf("failed to create dynamic store: %v", err)
+	}
+
 	return dbConn, store
 }
 

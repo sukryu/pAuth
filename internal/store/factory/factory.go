@@ -71,12 +71,19 @@ func (f *storeFactory) getManager(cfg *config.DatabaseConfig) (manager.Manager, 
 }
 
 func (f *storeFactory) NewDynamicStore(cfg *config.DatabaseConfig) (*dynamic.DynamicStore, error) {
+	// Manager를 가져옴
 	manager, err := f.getManager(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return dynamic.NewDynamicStore(manager.GetDB()), nil
+	// DynamicStore 생성
+	store, err := dynamic.NewDynamicStore(manager)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dynamic store: %w", err)
+	}
+
+	return store, nil
 }
 
 func (f *storeFactory) NewUserStore(cfg *config.DatabaseConfig) (interfaces.UserStore, error) {

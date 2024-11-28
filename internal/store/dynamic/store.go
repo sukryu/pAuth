@@ -8,19 +8,30 @@ import (
 
 	"github.com/sukryu/pAuth/internal/db"
 	"github.com/sukryu/pAuth/internal/store/dynamic/query"
+	"github.com/sukryu/pAuth/internal/store/manager"
 	"github.com/sukryu/pAuth/internal/store/schema"
 )
 
 type DynamicStore struct {
+	manager manager.Manager
 	queries *db.Queries
-	db      db.DBTX
 }
 
-func NewDynamicStore(dbConn db.DBTX) *DynamicStore {
-	return &DynamicStore{
-		queries: db.New(dbConn),
-		db:      dbConn,
+// NewDynamicStore initializes a new DynamicStore instance
+func NewDynamicStore(mgr manager.Manager) (*DynamicStore, error) {
+	// Get DB connection from manager
+	dbConn := mgr.GetDB()
+	if dbConn == nil {
+		return nil, fmt.Errorf("failed to initialize DynamicStore: no valid database connection")
 	}
+
+	// Create queries instance using the db.New function
+	queries := db.New(dbConn)
+
+	return &DynamicStore{
+		manager: mgr,
+		queries: queries,
+	}, nil
 }
 
 // 동적 테이블 생성
@@ -39,7 +50,7 @@ func (s *DynamicStore) CreateDynamicTable(ctx context.Context, tableName string,
 	query := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s)",
 		tableName, strings.Join(columnDefs, ", "))
 
-	if _, err := s.db.ExecContext(ctx, query); err != nil {
+	if _, err := s.manager.GetDB().ExecContext(ctx, query); err != nil {
 		return err
 	}
 
@@ -56,7 +67,7 @@ func (s *DynamicStore) CreateDynamicTable(ctx context.Context, tableName string,
 // AlterDynamicTable 테이블 수정
 func (s *DynamicStore) AlterDynamicTable(ctx context.Context, tableName string, alterSQL string) error {
 	query := fmt.Sprintf("ALTER TABLE %s %s", tableName, alterSQL)
-	_, err := s.db.ExecContext(ctx, query)
+	_, err := s.manager.GetDB().ExecContext(ctx, query)
 	return err
 }
 
@@ -64,7 +75,7 @@ func (s *DynamicStore) AlterDynamicTable(ctx context.Context, tableName string, 
 func (s *DynamicStore) CreateDynamicIndex(ctx context.Context, indexName, tableName string, columns string) error {
 	query := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (%s)",
 		indexName, tableName, columns)
-	_, err := s.db.ExecContext(ctx, query)
+	_, err := s.manager.GetDB().ExecContext(ctx, query)
 	return err
 }
 
@@ -109,7 +120,7 @@ func (s *DynamicStore) DynamicInsert(ctx context.Context, tableName string, data
 		strings.Join(columns, ", "),
 		strings.Join(placeholders, ", "))
 
-	_, err := s.db.ExecContext(ctx, query, values...)
+	_, err := s.manager.GetDB().ExecContext(ctx, query, values...)
 	return err
 }
 
@@ -131,7 +142,7 @@ func (s *DynamicStore) DynamicSelect(ctx context.Context, tableName string, cond
 		tableName,
 		strings.Join(clauses, " AND "))
 
-	rows, err := s.db.QueryContext(ctx, query, values...)
+	rows, err := s.manager.GetDB().QueryContext(ctx, query, values...)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +191,7 @@ func (s *DynamicStore) DynamicUpdate(ctx context.Context, tableName string, id s
 		tableName,
 		strings.Join(setParts, ", "))
 
-	result, err := s.db.ExecContext(ctx, query, values...)
+	result, err := s.manager.GetDB().ExecContext(ctx, query, values...)
 	if err != nil {
 		return err
 	}
@@ -201,7 +212,7 @@ func (s *DynamicStore) DynamicDelete(ctx context.Context, tableName string, id s
 	query := fmt.Sprintf("UPDATE %s SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL",
 		tableName)
 
-	result, err := s.db.ExecContext(ctx, query, id)
+	result, err := s.manager.GetDB().ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
@@ -235,7 +246,7 @@ func (s *DynamicStore) DynamicQuery(ctx context.Context, tableName string, query
 		query += " " + limit
 	}
 
-	rows, err := s.db.QueryContext(ctx, query, queryParams.GetArgs()...)
+	rows, err := s.manager.GetDB().QueryContext(ctx, query, queryParams.GetArgs()...)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +258,7 @@ func (s *DynamicStore) DynamicQuery(ctx context.Context, tableName string, query
 // 테이블 존재 여부 확인
 func (s *DynamicStore) tableExists(ctx context.Context, tableName string) (bool, error) {
 	query := "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
-	row := s.db.QueryRowContext(ctx, query, tableName)
+	row := s.manager.GetDB().QueryRowContext(ctx, query, tableName)
 
 	var name string
 	err := row.Scan(&name)
@@ -263,7 +274,7 @@ func (s *DynamicStore) tableExists(ctx context.Context, tableName string) (bool,
 // 테이블 컬럼 추가
 func (s *DynamicStore) AddColumn(ctx context.Context, tableName, columnDef string) error {
 	query := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", tableName, columnDef)
-	_, err := s.db.ExecContext(ctx, query)
+	_, err := s.manager.GetDB().ExecContext(ctx, query)
 	return err
 }
 
@@ -275,7 +286,7 @@ func (s *DynamicStore) DropColumn(ctx context.Context, tableName, columnName str
 // 테이블의 현재 스키마 조회
 func (s *DynamicStore) GetTableSchema(ctx context.Context, tableName string) ([]string, error) {
 	query := fmt.Sprintf("PRAGMA table_info(%s)", tableName)
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := s.manager.GetDB().QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -300,6 +311,6 @@ func (s *DynamicStore) GetTableSchema(ctx context.Context, tableName string) ([]
 // 테이블 삭제
 func (s *DynamicStore) DropTable(ctx context.Context, tableName string) error {
 	query := fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)
-	_, err := s.db.ExecContext(ctx, query)
+	_, err := s.manager.GetDB().ExecContext(ctx, query)
 	return err
 }

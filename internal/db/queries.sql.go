@@ -10,10 +10,67 @@ import (
 	"database/sql"
 )
 
+const addSchemaDependency = `-- name: AddSchemaDependency :exec
+INSERT INTO schema_dependencies (
+    parent_schema, child_schema, dependency_type
+) VALUES (?, ?, ?)
+`
+
+type AddSchemaDependencyParams struct {
+	ParentSchema   string
+	ChildSchema    string
+	DependencyType string
+}
+
+func (q *Queries) AddSchemaDependency(ctx context.Context, arg AddSchemaDependencyParams) error {
+	_, err := q.db.ExecContext(ctx, addSchemaDependency, arg.ParentSchema, arg.ChildSchema, arg.DependencyType)
+	return err
+}
+
+const addSchemaLog = `-- name: AddSchemaLog :exec
+INSERT INTO schema_logs (
+    schema_name, operation, operator, details
+) VALUES (?, ?, ?, ?)
+`
+
+type AddSchemaLogParams struct {
+	SchemaName string
+	Operation  string
+	Operator   sql.NullString
+	Details    sql.NullString
+}
+
+func (q *Queries) AddSchemaLog(ctx context.Context, arg AddSchemaLogParams) error {
+	_, err := q.db.ExecContext(ctx, addSchemaLog,
+		arg.SchemaName,
+		arg.Operation,
+		arg.Operator,
+		arg.Details,
+	)
+	return err
+}
+
+const addSchemaVersion = `-- name: AddSchemaVersion :exec
+INSERT INTO schema_versions (
+    schema_name, version, changes
+) VALUES (?, ?, ?)
+`
+
+type AddSchemaVersionParams struct {
+	SchemaName string
+	Version    int64
+	Changes    string
+}
+
+func (q *Queries) AddSchemaVersion(ctx context.Context, arg AddSchemaVersionParams) error {
+	_, err := q.db.ExecContext(ctx, addSchemaVersion, arg.SchemaName, arg.Version, arg.Changes)
+	return err
+}
+
 const createSchema = `-- name: CreateSchema :exec
 INSERT INTO entity_schemas (
-    id, name, description, fields, indexes
-) VALUES (?, ?, ?, ?, ?)
+    id, name, description, fields, indexes, annotations
+) VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type CreateSchemaParams struct {
@@ -22,6 +79,7 @@ type CreateSchemaParams struct {
 	Description sql.NullString
 	Fields      string
 	Indexes     sql.NullString
+	Annotations sql.NullString
 }
 
 func (q *Queries) CreateSchema(ctx context.Context, arg CreateSchemaParams) error {
@@ -31,12 +89,27 @@ func (q *Queries) CreateSchema(ctx context.Context, arg CreateSchemaParams) erro
 		arg.Description,
 		arg.Fields,
 		arg.Indexes,
+		arg.Annotations,
 	)
 	return err
 }
 
+const getLatestVersion = `-- name: GetLatestVersion :one
+SELECT version FROM schema_versions
+WHERE schema_name = ? 
+ORDER BY version DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestVersion(ctx context.Context, schemaName string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getLatestVersion, schemaName)
+	var version int64
+	err := row.Scan(&version)
+	return version, err
+}
+
 const getSchema = `-- name: GetSchema :one
-SELECT id, name, description, fields, indexes, created_at, updated_at, deleted_at FROM entity_schemas
+SELECT id, name, description, fields, indexes, annotations, created_at, updated_at, deleted_at FROM entity_schemas
 WHERE name = ? AND deleted_at IS NULL
 `
 
@@ -49,6 +122,7 @@ func (q *Queries) GetSchema(ctx context.Context, name string) (EntitySchema, err
 		&i.Description,
 		&i.Fields,
 		&i.Indexes,
+		&i.Annotations,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -56,8 +130,83 @@ func (q *Queries) GetSchema(ctx context.Context, name string) (EntitySchema, err
 	return i, err
 }
 
+const getSchemaDependencies = `-- name: GetSchemaDependencies :many
+SELECT id, parent_schema, child_schema, dependency_type, created_at FROM schema_dependencies
+WHERE parent_schema = ? OR child_schema = ?
+`
+
+type GetSchemaDependenciesParams struct {
+	ParentSchema string
+	ChildSchema  string
+}
+
+func (q *Queries) GetSchemaDependencies(ctx context.Context, arg GetSchemaDependenciesParams) ([]SchemaDependency, error) {
+	rows, err := q.db.QueryContext(ctx, getSchemaDependencies, arg.ParentSchema, arg.ChildSchema)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SchemaDependency
+	for rows.Next() {
+		var i SchemaDependency
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentSchema,
+			&i.ChildSchema,
+			&i.DependencyType,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSchemaLogs = `-- name: GetSchemaLogs :many
+SELECT id, schema_name, operation, operator, details, timestamp FROM schema_logs
+WHERE schema_name = ?
+ORDER BY timestamp DESC
+`
+
+func (q *Queries) GetSchemaLogs(ctx context.Context, schemaName string) ([]SchemaLog, error) {
+	rows, err := q.db.QueryContext(ctx, getSchemaLogs, schemaName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SchemaLog
+	for rows.Next() {
+		var i SchemaLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.SchemaName,
+			&i.Operation,
+			&i.Operator,
+			&i.Details,
+			&i.Timestamp,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSchemas = `-- name: ListSchemas :many
-SELECT id, name, description, fields, indexes, created_at, updated_at, deleted_at FROM entity_schemas
+SELECT id, name, description, fields, indexes, annotations, created_at, updated_at, deleted_at FROM entity_schemas
 WHERE deleted_at IS NULL
 `
 
@@ -76,6 +225,7 @@ func (q *Queries) ListSchemas(ctx context.Context) ([]EntitySchema, error) {
 			&i.Description,
 			&i.Fields,
 			&i.Indexes,
+			&i.Annotations,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -109,6 +259,7 @@ UPDATE entity_schemas
 SET description = ?,
     fields = ?,
     indexes = ?,
+    annotations = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE name = ? AND deleted_at IS NULL
 `
@@ -117,6 +268,7 @@ type UpdateSchemaParams struct {
 	Description sql.NullString
 	Fields      string
 	Indexes     sql.NullString
+	Annotations sql.NullString
 	Name        string
 }
 
@@ -125,6 +277,7 @@ func (q *Queries) UpdateSchema(ctx context.Context, arg UpdateSchemaParams) erro
 		arg.Description,
 		arg.Fields,
 		arg.Indexes,
+		arg.Annotations,
 		arg.Name,
 	)
 	return err

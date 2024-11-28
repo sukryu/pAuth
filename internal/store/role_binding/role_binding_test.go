@@ -8,15 +8,23 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/sukryu/pAuth/internal/store/dynamic"
+	"github.com/sukryu/pAuth/internal/store/manager"
 	"github.com/sukryu/pAuth/pkg/apis/auth/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func SetupTestDB(t *testing.T) (*sql.DB, *dynamic.DynamicStore) {
-	dbConn, err := sql.Open("sqlite3", ":memory:")
+func setupTestDB(t *testing.T) (*sql.DB, *dynamic.DynamicStore) {
+	// Manager 설정
+	manager, err := manager.NewSQLManager(manager.Config{
+		Type: "sqlite3",
+		DSN:  ":memory:",
+	})
 	if err != nil {
-		t.Fatalf("failed to open test db: %v", err)
+		t.Fatalf("failed to create SQLManager: %v", err)
 	}
+
+	// 데이터베이스 연결 가져오기
+	dbConn := manager.GetDB()
 
 	// 스키마 테이블 생성
 	_, err = dbConn.Exec(`
@@ -26,7 +34,7 @@ func SetupTestDB(t *testing.T) (*sql.DB, *dynamic.DynamicStore) {
            description TEXT,
            fields TEXT NOT NULL,
            indexes TEXT,
-           annotations TEXT,
+		   annotations TEXT,
            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
            deleted_at TIMESTAMP
@@ -53,12 +61,16 @@ func SetupTestDB(t *testing.T) (*sql.DB, *dynamic.DynamicStore) {
 		t.Fatalf("failed to create role_bindings table: %v", err)
 	}
 
-	dynStore := dynamic.NewDynamicStore(dbConn)
-	return dbConn, dynStore
-}
+	// DynamicStore 생성
+	store, err := dynamic.NewDynamicStore(manager)
+	if err != nil {
+		t.Fatalf("failed to create dynamic store: %v", err)
+	}
 
+	return dbConn, store
+}
 func setupTestStore(t *testing.T) (*Store, func()) {
-	dbConn, dynStore := SetupTestDB(t)
+	dbConn, dynStore := setupTestDB(t)
 	store := &Store{
 		dynamicStore: dynStore,
 		config:       Config{DatabaseType: "sqlite"},
