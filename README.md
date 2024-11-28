@@ -1,6 +1,6 @@
 # 📚 pAuth: The Flexible and Scalable Authentication Platform
 
-![pAuth Logo]<img src="public/pAuth.webp">
+<img src="public/pAuth.webp">
 
 **pAuth**는 다양한 요구사항에 따라 커스터마이징이 가능한 인증 및 권한 관리 플랫폼입니다. 기존의 Firebase Auth, Keycloak, Supabase 같은 도구가 제공하는 기능을 바탕으로, 대규모 플랫폼 수준의 사용자 인증 및 인가 서비스를 제공합니다. 
 
