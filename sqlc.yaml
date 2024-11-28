@@ -1,0 +1,9 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    schema: "sql/schema.sql"     # 데이터베이스 스키마 정의
+    queries: "sql/queries.sql"   # 쿼리 정의
+    gen:
+      go:
+        package: "db"            # 생성된 Go 코드를 포함할 패키지
+        out: "internal/db"       # 코드 생성 위치

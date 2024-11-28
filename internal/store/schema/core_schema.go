@@ -23,8 +23,8 @@ var CoreSchemas = []EntitySchema{
 			{Name: "last_login", Type: FieldTypeTimestamp},
 		},
 		Indexes: []IndexDef{
-			{Name: "idx_users_username", Fields: []string{"username"}, Unique: true},
-			{Name: "idx_users_email", Fields: []string{"email"}, Unique: true},
+			{Name: "idx_users_username", Columns: []string{"username"}, Unique: true},
+			{Name: "idx_users_email", Columns: []string{"email"}, Unique: true},
 		},
 	},
 	{
@@ -36,7 +36,7 @@ var CoreSchemas = []EntitySchema{
 			{Name: "rules", Type: FieldTypeJSON}, // PolicyRules를 JSON으로 저장
 		},
 		Indexes: []IndexDef{
-			{Name: "idx_roles_name", Fields: []string{"name"}, Unique: true},
+			{Name: "idx_roles_name", Columns: []string{"name"}, Unique: true},
 		},
 	},
 	{
@@ -48,8 +48,8 @@ var CoreSchemas = []EntitySchema{
 			{Name: "subjects", Type: FieldTypeJSON}, // Subject 목록을 JSON으로 저장
 		},
 		Indexes: []IndexDef{
-			{Name: "idx_role_bindings_name", Fields: []string{"name"}, Unique: true},
-			{Name: "idx_role_bindings_role_ref", Fields: []string{"role_ref"}},
+			{Name: "idx_role_bindings_name", Columns: []string{"name"}, Unique: true},
+			{Name: "idx_role_bindings_role_ref", Columns: []string{"role_ref"}},
 		},
 	},
 }
