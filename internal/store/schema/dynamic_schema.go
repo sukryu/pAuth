@@ -25,12 +25,15 @@ const (
 )
 
 type FieldDef struct {
-	Name         string    `json:"name"`
-	Type         FieldType `json:"type"`
-	Required     bool      `json:"required"`
-	Unique       bool      `json:"unique"`
-	Nullable     bool
-	DefaultValue interface{} `json:"defaultValue,omitempty"`
+	Name          string    `json:"name"`
+	Type          FieldType `json:"type"`
+	Required      bool      `json:"required"`
+	Unique        bool      `json:"unique"`
+	Nullable      bool
+	DefaultValue  interface{} `json:"defaultValue,omitempty"`
+	PrimaryKey    bool        `json:"primaryKey"`
+	NotNull       bool        `json:"notNull"`
+	AutoIncrement bool        `json:"autoIncrement"`
 }
 
 type IndexDef struct {
