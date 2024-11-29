@@ -25,9 +25,11 @@
   - Dynamic Store를 활용한 데이터베이스 테이블 생성 및 관리
 - ✅ **DatabaseConfig**
   - SQLite 초기 설정 및 PostgreSQL 확장 가능하도록 설계
-- ✅ **Dynamic Store**
+- ✅ Dynamic Store
   - 동적 테이블 생성, 데이터 삽입, 업데이트, 삭제 구현
   - 스키마 검증 및 인덱스 관리 기능 추가
+  - 동시성 제어 및 배치 복사 최적화 적용
+  - 멀티 스레드를 활용한 동적 테이블 컬럼 삭제 성능 최적화
 
 ---
 
@@ -41,7 +43,9 @@
 - ✅ **RoleBindingStore**
   - 역할 바인딩 CRUD 및 Subject 관리 구현
   - 테스트 커버리지: 80.0%
-
+- ✅ **DynamicStore 확장**
+  - `DropColumnWithConcurrency`메서드 구현 및 동시성 처리 적용(테스트)
+  - 멀티 스레드 데이터 복사 로직 도입 및 성능 최적화 (테스트)
 ---
 
 ### **3. Store Factory**
@@ -52,6 +56,9 @@
 
 ### **4. 테스트**
 - ✅ 각 Store의 단위 테스트 작성
+- ✅ DynamicStore 성능 벤치마크 테스트 작성
+  - DropColumnWithConcurrency 벤치마크 완료
+  - 인덱스 유무에 따른 데이터 조회 성능 비교 완료
 - ◯ 통합 테스트: Factory 및 서버 실행 로직 포함
 
 ---
